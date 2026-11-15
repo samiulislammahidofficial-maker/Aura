@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const audio = new PlaybackController($('audio'),$('video-panel'));
 const listening={starts:0,failures:0,buffering:0,startupMs:[]};
 let history=[],savedAlbums=[],favoriteArtists=[],providerConfig=[],searchStarted=0,searchLatency=0;
+let backendStatus='Checking backend…';
 let metadataDirty=true;
 let unshuffledQueue=[];
 function shuffleUpcoming(){const start=queueIndex+1;const tail=queue.slice(start);for(let i=tail.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[tail[i],tail[j]]=[tail[j],tail[i]];}queue=[...queue.slice(0,start),...tail];}
@@ -13,6 +14,7 @@ const byId = id => tracks.find(t => t.id === id);
 const canPlay = isPlayable;
 async function requestJSON(url, signal) {
   const response = await fetch(url,{signal:signal ? AbortSignal.any([signal,AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000)});
+  if(!response.headers.get('content-type')?.includes('application/json'))throw new Error('Aura backend is missing or outdated. Run npm start or deploy the Node web service; static hosting cannot serve /api routes.');
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Catalog request failed');
   return result;
@@ -25,9 +27,9 @@ function mergeCatalog(items) {
 async function loadCatalog(query = '') {
   searchRequest?.abort(); const controller = new AbortController(); searchRequest = controller;
   const started=performance.now();searchStarted=searchStarted||started;
-  catalogIds=query?LocalMusicProvider.search(query,tracks).map(t=>t.id):[];catalogDetails={artists:[],albums:[]};
+  catalogIds=query||$('source').value==='local'?LocalMusicProvider.search(query,tracks).map(t=>t.id):[];catalogDetails={artists:[],albums:[]};
   catalogStatus = 'loading'; catalogError = ''; render();
-  const requests=searchRequests(query,$('genre').value,providerConfig);
+  const requests=searchRequests(query,$('genre').value,providerConfig,$('source').value);
   const results=await Promise.allSettled(requests.map(async url=>{
     const data=await requestJSON(url,controller.signal);if(controller.signal.aborted)return;
     mergeCatalog(data.tracks);catalogIds=[...new Set([...catalogIds,...data.tracks.map(t=>t.id)])];
@@ -36,7 +38,7 @@ async function loadCatalog(query = '') {
   }));
   if(controller.signal.aborted)return;
   const failures=results.filter(p=>p.status==='rejected');
-  catalogStatus=failures.length===requests.length?'error':'ready';catalogError=failures.map(p=>p.reason.message).join(' ');
+  catalogStatus=requests.length&&failures.length===requests.length?'error':'ready';catalogError=failures.map(p=>p.reason.message).join(' ');
   if(failures.length&&catalogStatus==='ready')toast(`Partial results: ${catalogError}`);
   searchStarted=0;
   render();
@@ -159,11 +161,11 @@ async function play(id, replaceQueue = true) {
   if (current !== id || !audio.src) {
     audio.pause(); if (currentURL) URL.revokeObjectURL(currentURL);
     current = id;metadataDirty=true;
-    if(t.provider==='youtube'){try{await audio.useVideo(t.providerId);}catch(error){toast(error.message);return;}if(version!==playVersion)return;}
+    if(t.provider==='youtube'){try{await audio.useVideo(t.providerId);}catch(error){if(version===playVersion&&error.name!=='AbortError')toast(error.message);return;}if(version!==playVersion)return;}
     else {currentURL = t.file ? URL.createObjectURL(t.file) : null; audio.src = currentURL || `/api/stream/${encodeURIComponent(t.providerId)}`;}
     if(savedPosition){const position=savedPosition;savedPosition=0;audio.addEventListener('loadedmetadata',()=>{if(version===playVersion&&Number.isFinite(audio.duration))audio.currentTime=Math.min(position,audio.duration);},{once:true});}
   }
-  try { await audio.play(); if(version!==playVersion)return; retryCount=0;listening.startupMs.push(Math.round(performance.now()-started));listening.startupMs=listening.startupMs.slice(-30);history=[{id,at:Date.now()},...history.filter(h=>h.id!==id)].slice(0,100); } catch(error) { if(version!==playVersion||error.name==='AbortError')return;listening.failures++; toast(error.name==='NotAllowedError'?'Tap Play to resume audio.':'Playback failed. Check your connection or retry this track.'); }
+  try { await audio.play(); if(version!==playVersion)return; retryCount=0;listening.startupMs.push(Math.round(performance.now()-started));listening.startupMs=listening.startupMs.slice(-30);history=[{id,at:Date.now()},...history.filter(h=>h.id!==id)].slice(0,100); } catch(error) { if(version!==playVersion||error.name==='AbortError')return;listening.failures++; toast(error.name==='NotAllowedError'?'Tap Play to resume audio.':t.provider==='youtube'?error.message:'Playback failed. Check your connection or retry this track.'); }
   savePlayer();
   render();
 }
@@ -217,16 +219,22 @@ function picker(title, items, onSelect) {
   const close = document.createElement('button'); close.textContent = 'Close'; close.onclick = () => dialog.close(); dialog.append(close);
   dialog.addEventListener('close', () => dialog.remove()); document.body.append(dialog); dialog.showModal();
 }
+function showInfo(title,lines){
+  const dialog=document.createElement('dialog'),heading=document.createElement('h2'),close=document.createElement('button');heading.textContent=title;dialog.append(heading);
+  for(const line of lines){const p=document.createElement('p');p.textContent=line;dialog.append(p);}
+  close.textContent='Close';close.onclick=()=>dialog.close();dialog.append(close);dialog.onclose=()=>dialog.remove();document.body.append(dialog);dialog.showModal();
+}
+document.querySelector('.avatar').onclick=()=>showInfo('Your local profile',['Your music library is saved in this browser.','Aura has no cloud account or multi-device sync configured.']);
 function saveDetail(){
   const {id,name,type}=catalogDetails;const list=type==='artist'?favoriteArtists:savedAlbums;const index=list.findIndex(i=>i.id===id);
   if(index>=0)list.splice(index,1);else list.push({id,name,type});savePlayer();toast(index>=0?'Removed from collection':'Saved to your library');
 }
-$('source').onchange=render;
+$('source').onchange=()=>{if(['home','search','detail'].includes(view)){view='search';loadCatalog($('search').value.trim());}else render();};
 $('genre').onchange=()=>{view='home';$('search').value='';loadCatalog();};
 $('history-button').onclick=()=>{changeView('history');$('page-title').textContent='Recently played';};
 $('lyrics-button').onclick=async()=>toast((await lyricsProvider.get()).reason);
-$('providers-button').onclick=()=>picker('Music services',providerConfig.map(p=>({id:p.id,label:`${p.id}: ${p.message}`})),()=>{});
-$('diagnostics-button').onclick=()=>picker('Playback details (this session)',[{id:'search',label:`Last search to results: ${searchLatency} ms`},{id:'start',label:`Audio play promises: ${listening.starts}; failures: ${listening.failures}`},{id:'buffer',label:`Buffering events: ${listening.buffering}`},{id:'times',label:`Recent startup times (ms): ${listening.startupMs.join(', ')||'none'}`}],()=>{});
+$('providers-button').onclick=()=>showInfo('Music services',[backendStatus,...providerConfig.map(p=>`${p.id}: ${p.message}`)]);
+$('diagnostics-button').onclick=()=>showInfo('Playback details (this session)',[backendStatus,`Last search to results: ${searchLatency} ms`,`Playback attempts: ${listening.starts}; rejected attempts: ${listening.failures}`,`Buffering events: ${listening.buffering}`,`Recent startup times (ms): ${listening.startupMs.join(', ')||'none'}`]);
 function showSongOptions(id) {
   const choices = playlists.map(p => ({id:p.id,label:`Add to ${p.name}`}));
   choices.push({id:'new',label:'Create a new playlist'});
@@ -269,7 +277,7 @@ function showLibraryPicker() {
   if (!available.length) return toast(tracks.length ? 'All your songs are already in this playlist.' : 'Import some music first.');
   picker('Add a song', available.map(t => ({id:t.id,label:t.title})), async id => {
     const updated = {...p,tracks:[...p.tracks,id]};
-    try { await store('playlists','put',updated); Object.assign(p,updated); render(); toast('Added to playlist'); } catch { toast('Could not save playlist.'); }
+    try { await store('tracks','put',byId(id));await store('playlists','put',updated); Object.assign(p,updated); render(); toast('Added to playlist'); } catch { toast('Could not save playlist.'); }
   });
 }
 function metadata(file) {
@@ -341,7 +349,8 @@ try {
 } catch { toast('Library storage is unavailable. Streaming remains available; imports and saving require browser storage.'); }
 render();
 loadCatalog();
-requestJSON('/api/providers').then(data=>{providerConfig=data.providers;}).catch(()=>{providerConfig=[{id:'audius',enabled:true,message:'Public audio streams'}];});
-if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+requestJSON('/api/providers').then(data=>{providerConfig=data.providers;const option=$('source').querySelector('[value="youtube"]');const enabled=providerConfig.some(p=>p.id==='youtube'&&p.enabled);option.disabled=!enabled;option.textContent=enabled?'YouTube':'YouTube (API key required)';}).catch(error=>{providerConfig=[{id:'youtube',enabled:false,message:error.message}];});
+requestJSON('/api/health').then(data=>{backendStatus=`Backend connected · revision ${data.revision}`;}).catch(error=>{backendStatus=error.message;toast(error.message);});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(reg=>reg.update().catch(()=>{})).catch(()=>{});
 window.addEventListener('online',()=>{render();if(['home','search'].includes(view))loadCatalog($('search').value.trim());});
 window.addEventListener('offline',render);

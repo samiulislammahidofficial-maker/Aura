@@ -9,7 +9,7 @@ export const providers = {
 export const AudiusProvider={...providers.audius,id:'audius',search:q=>`/api/search?q=${encodeURIComponent(q)}`,discover:genre=>`/api/discover${genre?'?genre='+encodeURIComponent(genre):''}`,metadata:(type,id)=>`/api/${type}/${encodeURIComponent(id)}`,playlist:id=>`/api/album/${encodeURIComponent(id)}`};
 export const YouTubeProvider={...providers.youtube,id:'youtube',search:q=>`/api/youtube/search?q=${encodeURIComponent(q)}`};
 export const LocalMusicProvider={...providers.local,id:'local',search:(query,tracks)=>tracks.filter(t=>t.file&&`${t.title} ${t.artist}`.toLowerCase().includes(query.toLowerCase()))};
-export function searchRequests(query,genre,configuration){return [query?AudiusProvider.search(query):AudiusProvider.discover(genre),...(query&&configuration.some(p=>p.id==='youtube'&&p.enabled)?[YouTubeProvider.search(query)]:[])];}
+export function searchRequests(query,genre,configuration,source='all'){return [...(['all','audius'].includes(source)?[query?AudiusProvider.search(query):AudiusProvider.discover(genre)]:[]),...(['all','youtube'].includes(source)&&query&&configuration.some(p=>p.id==='youtube'&&p.enabled)?[YouTubeProvider.search(query)]:[])];}
 export function isPlayable(t){return !!t && (t.file instanceof Blob || (t.playable===true && ['audio','youtube-embed'].includes(t.playbackType || (t.provider==='audius'?'audio':null))));}
 export const lyricsProvider={async get(){return {available:false,reason:'Synchronized lyrics are unavailable: no licensed lyrics provider is configured.'};}};
 const words=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/);

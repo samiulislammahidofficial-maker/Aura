@@ -18,6 +18,8 @@ test('recording comparisons reject incompatible versions and durations',()=>{
   assert(!matchTrack(t,{...t,duration:210}).suggest);
   assert(!isPlayable({...t,provider:'spotify',playable:true}));assert(!isPlayable({...t,provider:'audius',playable:false,playbackType:'audio'}));
   assert.equal(searchRequests('x','',[]).length,1);assert.equal(searchRequests('x','',[{id:'youtube',enabled:true}]).length,2);
+  assert.equal(searchRequests('x','',[],'local').length,0,'Local search must not request a remote catalog');
+  assert.deepEqual(searchRequests('x','',[{id:'youtube',enabled:true}],'youtube'),['/api/youtube/search?q=x']);
 });
 test('lyrics and unconfigured services state their missing requirements',async()=>{
   assert.equal((await lyricsProvider.get()).available,false);assert.equal(providerStatus().find(p=>p.id==='spotify').enabled,false);

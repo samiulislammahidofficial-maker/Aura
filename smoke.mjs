@@ -27,6 +27,14 @@ try {
   await send('Page.navigate',{url:'http://localhost:5173'});
   await waitFor(`document.querySelector('[data-view="library"]') !== null`);
   await waitFor(`document.getElementById('catalog-status').textContent.length > 0`);
+  await waitFor(`document.querySelector('#source option[value="youtube"]').textContent.includes('API key')`);
+  assert(await evaluate(`document.querySelector('#source option[value="youtube"]').disabled`));
+  await evaluate(`document.getElementById('providers-button').click()`);
+  await waitFor(`document.querySelector('dialog[open]')?.textContent.includes('Backend connected')`);
+  await evaluate(`document.querySelector('dialog[open] button').click();document.getElementById('diagnostics-button').click()`);
+  assert(await evaluate(`document.querySelector('dialog[open]').textContent.includes('Playback attempts')`));
+  await evaluate(`document.querySelector('dialog[open] button').click();document.getElementById('lyrics-button').click()`);
+  assert(await evaluate(`document.getElementById('toast').textContent.includes('no licensed lyrics')`));
   await evaluate(`document.querySelector('[data-view="library"]').click()`);
   await waitFor(`document.querySelector('.empty') !== null`);
   const doc=await send('DOM.getDocument');
@@ -40,7 +48,7 @@ try {
   await waitFor(`!document.getElementById('audio').paused && document.getElementById('audio').currentTime > 0`);
   await evaluate(`document.getElementById('play').click(); document.getElementById('create-playlist').click(); document.getElementById('playlist-name').value='Smoke playlist'; document.getElementById('playlist-form').requestSubmit()`);
   await waitFor(`document.getElementById('page-title').textContent === 'Smoke playlist'`);
-  await evaluate(`document.getElementById('add-library').click(); document.querySelector('dialog:not(#playlist-dialog) .playlist-link').click()`);
+  await evaluate(`document.getElementById('add-library').click(); [...document.querySelectorAll('dialog:not(#playlist-dialog) .playlist-link')].find(b=>b.textContent==='Test Song').click()`);
   await waitFor(`document.querySelectorAll('.track-row').length === 1`);
   await send('Page.reload');
   await waitFor(`document.getElementById('playlist-nav').textContent.includes('Smoke playlist')`);
@@ -63,6 +71,9 @@ try {
   const secondDoc=await send('DOM.getDocument');const secondInput=await send('DOM.querySelector',{nodeId:secondDoc.root.nodeId,selector:'#import'});
   await send('DOM.setFileInputFiles',{nodeId:secondInput.nodeId,files:[secondFixture]});
   await waitFor(`document.querySelectorAll('.track-row').length===2`);
+  await evaluate(`document.getElementById('source').value='local';document.getElementById('source').dispatchEvent(new Event('change'))`);
+  assert.equal(await evaluate(`document.querySelectorAll('.track-row').length`),2);
+  await evaluate(`document.getElementById('source').value='all';document.getElementById('source').dispatchEvent(new Event('change'))`);
   await evaluate(`document.getElementById('shuffle').click();document.getElementById('repeat').click();document.querySelector('[data-play]').click()`);
   await waitFor(`!document.getElementById('audio').paused`);
   const firstTitle=await evaluate(`document.getElementById('now-title').textContent`);
@@ -113,10 +124,15 @@ try {
   await waitFor(`document.getElementById('catalog-status')?.textContent.includes('Offline')`);
   await evaluate(`document.querySelector('[data-view="library"]').click()`);
   await waitFor(`document.querySelectorAll('.track-row').length>=2`);
-  const cached=await evaluate(`caches.open('aura-shell-v1').then(c=>c.keys()).then(keys=>keys.map(k=>new URL(k.url).pathname))`);
+  const cached=await evaluate(`caches.open('aura-shell-v2').then(c=>c.keys()).then(keys=>keys.map(k=>new URL(k.url).pathname))`);
+  assert(cached.includes('/app.js')&&cached.includes('/playback.js'),'Current offline shell contains implemented modules');
   assert(!cached.some(p=>p.startsWith('/api/')),'Offline cache contains no provider metadata or streams');
   await send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
   console.log('PASS: offline application shell and imported library survive reload; API/streams excluded from cache');
+  if(process.env.AURA_LIVE_YOUTUBE==='1'){
+    const result=await evaluate(`(async()=>{document.getElementById('audio').pause();const {PlaybackController}=await import('/playback.js');const player=new PlaybackController(document.createElement('audio'),document.getElementById('video-panel'));try{await player.useVideo('M7lc1UVf-VE');await player.play();return {playing:!player.paused,time:player.currentTime};}catch(error){return {error:error.message};}finally{player.pause();}})()`);
+    console.log('LIVE YOUTUBE IFRAME CHECK:',JSON.stringify(result));
+  }
   console.log('PASS: import, real playback, favorites, playlist creation and membership, persistence, search, mobile width');
 } finally {
   ws?.close(); chrome.kill(); await pause(1000);
