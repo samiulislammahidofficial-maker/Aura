@@ -1,0 +1,40 @@
+{
+  "measuredAt": "2026-11-15T09:26:14.139Z",
+  "samples": [
+    {
+      "route": "/api/search?q=chill",
+      "status": 200,
+      "ms": 2323,
+      "tracks": 24
+    },
+    {
+      "route": "/api/search?q=chill",
+      "status": 200,
+      "ms": 5,
+      "tracks": 24
+    },
+    {
+      "route": "/api/discover",
+      "status": 200,
+      "ms": 1685,
+      "tracks": 24
+    },
+    {
+      "route": "/api/discover",
+      "status": 200,
+      "ms": 3,
+      "tracks": 24
+    },
+    {
+      "route": "/api/stream/:id authorization + local redirect",
+      "status": 302,
+      "ms": 402
+    },
+    {
+      "route": "official stream redirect chain + first bytes",
+      "status": 200,
+      "ms": 2298,
+      "bytes": 1369
+    }
+  ]
+}

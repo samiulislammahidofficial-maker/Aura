@@ -3,5 +3,5 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "node server.mjs", "start": "node server.mjs", "check": "node --check app.js && node --check server.mjs && node --check catalog-api.mjs", "test": "node --test catalog-api.test.mjs", "test:browser": "node smoke.mjs" }
+  "scripts": { "dev": "node --env-file-if-exists=.env server.mjs", "start": "node --env-file-if-exists=.env server.mjs", "check": "node check.mjs", "test": "node --test catalog-api.test.mjs providers.test.mjs playback.test.mjs", "test:browser": "node smoke.mjs", "benchmark": "node benchmark.mjs" }
 }

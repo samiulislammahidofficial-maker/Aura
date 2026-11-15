@@ -1,6 +1,6 @@
 # Aura
 
-Aura now includes Audius discovery and authorized public streaming alongside the existing imported-audio library. The existing layout, colors, navigation and player are preserved. The historical notes below describe the original local-only version; this section supersedes those limitations.
+Aura includes Audius discovery and authorized public streaming alongside the existing imported-audio library. The existing layout, colors, navigation and player are preserved. See [the upgrade report](UPGRADE.md) for provider architecture, YouTube configuration, library/PWA features, measured performance, test scope and remaining credential/licensing requirements.
 
 ## Current behavior and root cause
 
@@ -18,7 +18,7 @@ IndexedDB version 2 migrates existing libraries and stores the current track, qu
 
 ## Background playback and limits
 
-Media Session exposes metadata, position, play/pause, stop, seek, next and previous handlers to supporting browser/OS notification, lock-screen and headset controls. Switching views or tab visibility does not intentionally pause playback. The browser and OS manage audio focus and interruptions; Aura does not force automatic resumption after an interruption.
+Media Session exposes metadata, position, play/pause, stop, seek, next and previous handlers to supporting browser/OS notification, lock-screen and headset controls. Switching views or tab visibility does not intentionally pause authorized audio playback. YouTube video playback requires its visible official player and pauses when the page is hidden. The browser and OS manage audio focus and interruptions; Aura does not force automatic resumption after an interruption.
 
 This is a browser app, with no Android/Kotlin/Gradle project. Media3 ExoPlayer and MediaSessionService cannot run directly here. Native Android service lifecycle, guaranteed locked-screen continuity, Bluetooth behavior and process survival require a native Android implementation. Browser support and power policies determine actual background behavior. Closing/force-killing the browser ends playback. A service worker is not a substitute for a foreground audio service.
 
