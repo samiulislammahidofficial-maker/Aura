@@ -5,6 +5,7 @@ import path from 'node:path';
 import { catalogRoute } from './catalog-api.mjs';
 import {youtubeSearch,youtubeDetail,providerStatus} from './youtube-api.mjs';
 import {ytmusic} from './ytmusic-bridge.mjs';
+import {streamxRoute,streamxStatus} from './streamx-api.mjs';
 if(process.env.YTMUSIC_ENABLED!=='false')await ytmusic.start();
 import {execFileSync} from 'node:child_process';
 let revision=process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown';
@@ -21,7 +22,8 @@ http.createServer(async (req, res) => {
   res.setHeader('X-Aura-Revision',revision);
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); res.end(); return; }
   if(url.pathname==='/api/health'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({app:'Aura',revision,backend:true}));return;}
-  if(url.pathname==='/api/providers'){if(process.env.YTMUSIC_ENABLED!=='false'&&ytmusic.configured&&!ytmusic.available)await ytmusic.start();res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({providers:providerStatus()}));return;}
+  if(url.pathname==='/api/providers'){if(process.env.YTMUSIC_ENABLED!=='false'&&ytmusic.configured&&!ytmusic.available)await ytmusic.start();res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({providers:[...providerStatus(),streamxStatus()]}));return;}
+  if(url.pathname.startsWith('/api/streamx/'))return streamxRoute(url,req,res);
   if(url.pathname==='/api/youtube/search'){
     try{const result=await youtubeSearch((url.searchParams.get('q')||'').trim().slice(0,160));res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(result));}
     catch(e){res.writeHead(e.status||502,{'Content-Type':'application/json'});res.end(JSON.stringify({error:e.message}));}return;

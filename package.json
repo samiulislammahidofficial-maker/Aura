@@ -4,5 +4,5 @@
   "private": true,
   "type": "module",
   "engines": {"node": ">=22.9.0"},
-  "scripts": { "dev": "node --env-file-if-exists=.env server.mjs", "start": "node --env-file-if-exists=.env server.mjs", "check": "node check.mjs", "test": "node --test catalog-api.test.mjs providers.test.mjs playback.test.mjs server.test.mjs ytmusic-bridge.test.mjs", "test:browser": "node smoke.mjs", "benchmark": "node benchmark.mjs" }
+  "scripts": { "dev": "node --env-file-if-exists=.env server.mjs", "start": "node --env-file-if-exists=.env server.mjs", "check": "node check.mjs", "test": "node --test catalog-api.test.mjs providers.test.mjs playback.test.mjs server.test.mjs ytmusic-bridge.test.mjs streamx-api.test.mjs", "test:browser": "node smoke.mjs", "benchmark": "node benchmark.mjs" }
 }
