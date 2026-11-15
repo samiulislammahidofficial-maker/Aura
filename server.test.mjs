@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {spawn} from 'node:child_process';import {once} from 'node:events';
 test('production server exposes backend, revalidated assets and disabled services correctly',async()=>{
-  const child=spawn(process.execPath,['server.mjs'],{cwd:new URL('.',import.meta.url),env:{...process.env,PORT:'23617',HOST:'0.0.0.0',NODE_ENV:'production',YOUTUBE_API_KEY:'',COMMIT_SHA:'test-build'},windowsHide:true,stdio:['ignore','pipe','pipe']});
+  const child=spawn(process.execPath,['server.mjs'],{cwd:new URL('.',import.meta.url),env:{...process.env,PORT:'23617',HOST:'0.0.0.0',NODE_ENV:'production',YTMUSIC_ENABLED:'false',YOUTUBE_API_KEY:'',COMMIT_SHA:'test-build'},windowsHide:true,stdio:['ignore','pipe','pipe']});
   try{
     await Promise.race([once(child.stdout,'data'),once(child,'exit').then(()=>{throw new Error('Server exited');}),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Server startup timeout')),5000).unref())]);
     const base='http://127.0.0.1:23617';const health=await(await fetch(base+'/api/health')).json();assert.equal(health.revision,'test-build');assert.equal(health.backend,true);

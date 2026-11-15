@@ -27,8 +27,8 @@ try {
   await send('Page.navigate',{url:'http://localhost:5173'});
   await waitFor(`document.querySelector('[data-view="library"]') !== null`);
   await waitFor(`document.getElementById('catalog-status').textContent.length > 0`);
-  await waitFor(`document.querySelector('#source option[value="youtube"]').textContent.includes('API key')`);
-  assert(await evaluate(`document.querySelector('#source option[value="youtube"]').disabled`));
+  await waitFor(`!document.querySelector('#source option[value="youtube"]').textContent.includes('checking')`);
+  const youtubeAvailable=await evaluate(`!document.querySelector('#source option[value="youtube"]').disabled`);
   await evaluate(`document.getElementById('providers-button').click()`);
   await waitFor(`document.querySelector('dialog[open]')?.textContent.includes('Backend connected')`);
   await evaluate(`document.querySelector('dialog[open] button').click();document.getElementById('diagnostics-button').click()`);
@@ -103,6 +103,7 @@ try {
   await evaluate(`document.querySelector('[data-view="library"]').click()`);
   assert(await evaluate(`!document.getElementById('audio').paused`),'Streaming survives navigation');
   console.log('PASS: live catalog, authorized streaming, Media Session metadata, seeking, shuffle/repeat state and navigation continuity');
+  await evaluate(`document.getElementById('source').value='audius'`);
   const intercepted=[];
   ws.addEventListener('message',event=>{const data=JSON.parse(event.data);if(data.method!=='Fetch.requestPaused')return;const {requestId,request}=data.params;const url=new URL(request.url);const q=url.searchParams.get('q');intercepted.push(q);const fail=q==='fixture-failure';setTimeout(()=>send('Fetch.fulfillRequest',{requestId,responseCode:fail?503:200,responseHeaders:[{name:'Content-Type',value:'application/json'}],body:Buffer.from(JSON.stringify(fail?{error:'Fixture provider outage'}:{tracks:[{id:'audius:fixture',provider:'audius',providerId:'fixture',title:q,artist:'Fixture Artist',duration:180,playbackType:'audio',playable:true}],artists:[],albums:[]})).toString('base64')}).catch(()=>{}),q==='fixture-slow'?800:50);});
   await send('Fetch.enable',{patterns:[{urlPattern:'*/api/search?*'}]});
@@ -116,6 +117,11 @@ try {
   await waitFor(`document.querySelector('.track-info strong')?.textContent==='fixture-slow'`);
   await send('Fetch.disable');
   console.log('PASS: deterministic rapid typing, provider outage and slow search loading');
+  if(youtubeAvailable){
+    await evaluate(`document.getElementById('search').value='Oasis Wonderwall';document.getElementById('source').value='youtube';document.getElementById('source').dispatchEvent(new Event('change'))`);
+    await waitFor(`document.querySelector('.track-info small')?.textContent.includes('YouTube') && document.getElementById('tracks').getAttribute('aria-busy')==='false'`);
+    console.log('PASS: live YouTube Music search via Python backend and frontend source selector');
+  }
   await evaluate(`navigator.serviceWorker.ready.then(()=>true)`);
   await send('Page.reload');
   await waitFor(`!!navigator.serviceWorker.controller && !!document.getElementById('catalog-status').textContent`);

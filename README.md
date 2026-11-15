@@ -1,5 +1,7 @@
 # Aura
 
+YouTube Music now uses the Python **ytmusicapi** provider for keyless public discovery. See [YouTube Music setup](YOUTUBE_MUSIC.md) for installation, endpoints, testing and the updated Node + Python hosting configuration. Playback remains in the official visible YouTube player.
+
 See [implementation verification and repair](REPAIR.md) for repository/hosting evidence, current cache and provider fixes, deployment instructions, and exact verification limits. Aura must run on a Node web service; a static-only deployment cannot supply its API routes.
 
 Aura includes Audius discovery and authorized public streaming alongside the existing imported-audio library. The existing layout, colors, navigation and player are preserved. See [the upgrade report](UPGRADE.md) for provider architecture, YouTube configuration, library/PWA features, measured performance, test scope and remaining credential/licensing requirements.

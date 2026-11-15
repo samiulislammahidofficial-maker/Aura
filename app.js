@@ -43,10 +43,10 @@ async function loadCatalog(query = '') {
   searchStarted=0;
   render();
 }
-async function openCatalogDetail(type,id) {
+async function openCatalogDetail(type,id,provider='audius') {
   searchRequest?.abort(); const controller=new AbortController();searchRequest=controller;
   view='detail';catalogStatus='loading';catalogDetails=null;catalogIds=[];render();
-  try { const data=await requestJSON(`/api/${type}/${encodeURIComponent(id)}`,controller.signal); if(controller.signal.aborted)return; mergeCatalog(data.tracks);catalogIds=data.tracks.map(t=>t.id);catalogDetails={...data,type,id};catalogStatus='ready'; }
+  try { const data=await requestJSON(`/api/${provider==='youtube'?'youtube/':''}${type}/${encodeURIComponent(id)}`,controller.signal); if(controller.signal.aborted)return; mergeCatalog(data.tracks);catalogIds=data.tracks.map(t=>t.id);catalogDetails={...data,type,id,provider};catalogStatus='ready'; }
   catch(error){if(controller.signal.aborted)return;catalogStatus='error';catalogError=error.message;}
   render();
 }
@@ -117,7 +117,7 @@ function render() {
     if(t.provider) {
       const subtitle=row.querySelector('.track-info small');
       subtitle.textContent=`${t.artist} · ${t.provider==='local'?'Local file':t.provider==='youtube'?'YouTube video':canPlay(t)?'Audius stream':'Metadata only · unavailable'}`;
-      if(t.artistId){subtitle.dataset.artist=t.artistId;subtitle.tabIndex=0;subtitle.setAttribute('role','button');}
+      if(t.artistId){subtitle.dataset.artist=t.artistId;subtitle.dataset.provider=t.provider;subtitle.tabIndex=0;subtitle.setAttribute('role','button');}
       row.querySelector('.album-column').textContent=t.album || t.genre || (t.provider==='local'?'Local collection':'Audius');
       row.querySelectorAll('[data-play]').forEach(b=>b.disabled=!canPlay(t));
     }
@@ -130,10 +130,10 @@ function render() {
   $('catalog-results').replaceChildren();
   if(remote&&catalogDetails){
     for(const [key,type] of [['artists','artist'],['albums','album']]) for(const item of catalogDetails[key]||[]) {
-      const b=document.createElement('button');b.className='catalog-chip';b.textContent=`${key==='artists'?'Artist':item.isAlbum?'Album':'Playlist'} · ${item.name}`;b.onclick=()=>item.url?window.open(item.url,'_blank','noopener,noreferrer'):openCatalogDetail(type,item.id);$('catalog-results').append(b);
+      const b=document.createElement('button');b.className='catalog-chip';b.textContent=`${key==='artists'?'Artist':item.isAlbum?'Album':'Playlist'} · ${item.name}`;b.onclick=()=>item.url?window.open(item.url,'_blank','noopener,noreferrer'):openCatalogDetail(item.provider==='youtube'&&type==='album'&&!item.isAlbum?'playlist':type,item.id,item.provider);$('catalog-results').append(b);
     }
   }
-  if(view==='library')for(const item of [...savedAlbums,...favoriteArtists]){const b=document.createElement('button');b.className='catalog-chip';b.textContent=`${item.type==='artist'?'Favorite artist':'Saved collection'} · ${item.name}`;b.onclick=()=>openCatalogDetail(item.type,item.id);$('catalog-results').append(b);}
+  if(view==='library')for(const item of [...savedAlbums,...favoriteArtists]){const b=document.createElement('button');b.className='catalog-chip';b.textContent=`${item.type==='artist'?'Favorite artist':'Saved collection'} · ${item.name}`;b.onclick=()=>openCatalogDetail(item.type,item.id,item.provider);$('catalog-results').append(b);}
   if(view==='detail'&&catalogDetails?.name){const b=document.createElement('button');b.className='catalog-chip';b.textContent='Save / unsave collection or artist';b.onclick=()=>saveDetail();$('catalog-results').append(b);}
 }
 function updatePlayer() {
@@ -192,7 +192,7 @@ function playlistDialog(trackId = null, name = '') {
 }
 document.addEventListener('click', async e => {
   if(e.target.closest('.brand')){e.preventDefault();changeView('home');return;}
-  const artist=e.target.closest('[data-artist]');if(artist){openCatalogDetail('artist',artist.dataset.artist);return;}
+  const artist=e.target.closest('[data-artist]');if(artist){openCatalogDetail('artist',artist.dataset.artist,artist.dataset.provider);return;}
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.view) changeView(b.dataset.view);
   if (b.dataset.playlist) changeView(b.dataset.playlist);
@@ -226,8 +226,8 @@ function showInfo(title,lines){
 }
 document.querySelector('.avatar').onclick=()=>showInfo('Your local profile',['Your music library is saved in this browser.','Aura has no cloud account or multi-device sync configured.']);
 function saveDetail(){
-  const {id,name,type}=catalogDetails;const list=type==='artist'?favoriteArtists:savedAlbums;const index=list.findIndex(i=>i.id===id);
-  if(index>=0)list.splice(index,1);else list.push({id,name,type});savePlayer();toast(index>=0?'Removed from collection':'Saved to your library');
+  const {id,name,type,provider}=catalogDetails;const list=type==='artist'?favoriteArtists:savedAlbums;const index=list.findIndex(i=>i.id===id&&i.provider===provider);
+  if(index>=0)list.splice(index,1);else list.push({id,name,type,provider});savePlayer();toast(index>=0?'Removed from collection':'Saved to your library');
 }
 $('source').onchange=()=>{if(['home','search','detail'].includes(view)){view='search';loadCatalog($('search').value.trim());}else render();};
 $('genre').onchange=()=>{view='home';$('search').value='';loadCatalog();};
@@ -337,7 +337,7 @@ if('mediaSession' in navigator){
   Object.entries(handlers).forEach(([action,handler])=>{try{navigator.mediaSession.setActionHandler(action,handler);}catch{}});
 }
 document.addEventListener('keydown', e => {
-  if(e.key==='Enter'&&document.activeElement.dataset.artist){openCatalogDetail('artist',document.activeElement.dataset.artist);return;}
+  if(e.key==='Enter'&&document.activeElement.dataset.artist){openCatalogDetail('artist',document.activeElement.dataset.artist,document.activeElement.dataset.provider);return;}
   if (['INPUT','TEXTAREA','BUTTON'].includes(document.activeElement.tagName) || document.querySelector('dialog[open]')) return;
   if (e.key === ' ') { e.preventDefault(); togglePlay(); }
   if (e.key === '/') { e.preventDefault(); $('search').focus(); }
@@ -349,7 +349,7 @@ try {
 } catch { toast('Library storage is unavailable. Streaming remains available; imports and saving require browser storage.'); }
 render();
 loadCatalog();
-requestJSON('/api/providers').then(data=>{providerConfig=data.providers;const option=$('source').querySelector('[value="youtube"]');const enabled=providerConfig.some(p=>p.id==='youtube'&&p.enabled);option.disabled=!enabled;option.textContent=enabled?'YouTube':'YouTube (API key required)';}).catch(error=>{providerConfig=[{id:'youtube',enabled:false,message:error.message}];});
+requestJSON('/api/providers').then(data=>{providerConfig=data.providers;const option=$('source').querySelector('[value="youtube"]');const enabled=providerConfig.some(p=>p.id==='youtube'&&p.enabled);option.disabled=!enabled;option.textContent=enabled?'YouTube Music':'YouTube Music (setup required)';}).catch(error=>{providerConfig=[{id:'youtube',enabled:false,message:error.message}];});
 requestJSON('/api/health').then(data=>{backendStatus=`Backend connected · revision ${data.revision}`;}).catch(error=>{backendStatus=error.message;toast(error.message);});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(reg=>reg.update().catch(()=>{})).catch(()=>{});
 window.addEventListener('online',()=>{render();if(['home','search'].includes(view))loadCatalog($('search').value.trim());});

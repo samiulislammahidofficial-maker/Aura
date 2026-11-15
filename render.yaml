@@ -1,11 +1,10 @@
 services:
   - type: web
     name: aura
-    runtime: node
+    runtime: docker
     plan: free
     branch: main
-    buildCommand: npm run check
-    startCommand: npm start
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

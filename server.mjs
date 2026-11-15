@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { catalogRoute } from './catalog-api.mjs';
-import {youtubeSearch,providerStatus} from './youtube-api.mjs';
+import {youtubeSearch,youtubeDetail,providerStatus} from './youtube-api.mjs';
+import {ytmusic} from './ytmusic-bridge.mjs';
+if(process.env.YTMUSIC_ENABLED!=='false')await ytmusic.start();
 import {execFileSync} from 'node:child_process';
 let revision=process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown';
 if(revision==='unknown')try{revision=execFileSync('git',['rev-parse','HEAD'],{cwd:rootDirectory(),encoding:'utf8',stdio:['ignore','pipe','ignore']}).trim();}catch{}
@@ -24,6 +26,8 @@ http.createServer(async (req, res) => {
     try{const result=await youtubeSearch((url.searchParams.get('q')||'').trim().slice(0,160));res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(result));}
     catch(e){res.writeHead(e.status||502,{'Content-Type':'application/json'});res.end(JSON.stringify({error:e.message}));}return;
   }
+  const youtubeMatch=url.pathname.match(/^\/api\/youtube\/(artist|album|playlist)\/([A-Za-z0-9_-]{1,160})$/);
+  if(youtubeMatch){try{const data=await youtubeDetail(youtubeMatch[1],youtubeMatch[2]);res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));}catch(error){res.writeHead(error.status||502,{'Content-Type':'application/json'});res.end(JSON.stringify({error:error.message}));}return;}
   if (url.pathname.startsWith('/api/')) return catalogRoute(url, res);
   const file = files.get(url.pathname);
   if (!file) { res.writeHead(404); res.end('Not found'); return; }
