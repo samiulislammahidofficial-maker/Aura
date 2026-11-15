@@ -24,7 +24,17 @@ try {
   const evaluate = async expression => { const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true}); if(result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails)); return result.result.value; };
   const waitFor = async expression => { for(let i=0;i<150;i++){if(await evaluate(expression))return;await pause(100);}throw new Error(`Timed out: ${expression} | ${await evaluate("document.getElementById('toast').textContent + ' / ' + document.getElementById('tracks').textContent")}`); };
   await send('Runtime.enable');
+  const unavailableStatus=event=>{const data=JSON.parse(event.data);if(data.method==='Fetch.requestPaused')send('Fetch.fulfillRequest',{requestId:data.params.requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'text/html'}],body:Buffer.from('<html>Static host has no Node API</html>').toString('base64')}).catch(()=>{});};
+  ws.addEventListener('message',unavailableStatus);
+  await send('Fetch.enable',{patterns:[{urlPattern:'*/api/providers'}]});
   await send('Page.navigate',{url:'http://localhost:5173'});
+  await waitFor(`document.querySelector('#source option[value="youtube"]')?.textContent.includes('backend check failed')`);
+  assert(await evaluate(`document.querySelector('#source option[value="youtube"]').title.includes('static hosting')`),'Failed provider check explains missing backend');
+  ws.removeEventListener('message',unavailableStatus);await send('Fetch.disable');
+  await evaluate(`document.getElementById('providers-button').click()`);
+  await waitFor(`document.querySelector('dialog[open]')?.textContent.includes('Backend connected')`);
+  await evaluate(`document.querySelector('dialog[open] button').click()`);
+  console.log('PASS: missing provider backend leaves checking state and Music services retries successfully');
   await waitFor(`document.querySelector('[data-view="library"]') !== null`);
   await waitFor(`document.getElementById('catalog-status').textContent.length > 0`);
   await waitFor(`!document.querySelector('#source option[value="youtube"]').textContent.includes('checking')`);

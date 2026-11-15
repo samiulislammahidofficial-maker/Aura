@@ -5,6 +5,27 @@ const audio = new PlaybackController($('audio'),$('video-panel'));
 const listening={starts:0,failures:0,buffering:0,startupMs:[]};
 let history=[],savedAlbums=[],favoriteArtists=[],providerConfig=[],searchStarted=0,searchLatency=0;
 let backendStatus='Checking backend…';
+let providerRefresh=null,providerRetry=null,providerRetryCount=0;
+async function refreshProviders(){
+  if(providerRefresh)return providerRefresh;
+  const option=$('source').querySelector('[value="youtube"]');
+  providerRefresh=(async()=>{
+    try{
+      const data=await requestJSON('/api/providers',AbortSignal.timeout(6000));
+      if(!Array.isArray(data.providers))throw new Error('Aura backend returned invalid provider status.');
+      providerConfig=data.providers;const youtube=providerConfig.find(p=>p.id==='youtube');
+      option.disabled=!youtube?.enabled;option.textContent=youtube?.enabled?'YouTube Music':'YouTube Music (setup required)';option.title=youtube?.message||'YouTube Music is not configured.';
+      clearTimeout(providerRetry);providerRetryCount=0;
+      try{const health=await requestJSON('/api/health',AbortSignal.timeout(6000));backendStatus=`Backend connected · revision ${health.revision}`;}catch{backendStatus='Provider backend connected; revision check unavailable.';}
+    }catch(error){
+      const message=error.name==='TimeoutError'?'Provider check timed out. The backend may be starting; retry using Music services.':error.message;
+      option.disabled=true;option.textContent='YouTube Music (backend check failed)';option.title=message;
+      providerConfig=[{id:'youtube',enabled:false,message}];backendStatus=message;
+      if(navigator.onLine&&providerRetryCount++<3)providerRetry=setTimeout(()=>refreshProviders(),15000);
+    }
+  })();
+  try{await providerRefresh;}finally{providerRefresh=null;}
+}
 let metadataDirty=true;
 let unshuffledQueue=[];
 function shuffleUpcoming(){const start=queueIndex+1;const tail=queue.slice(start);for(let i=tail.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[tail[i],tail[j]]=[tail[j],tail[i]];}queue=[...queue.slice(0,start),...tail];}
@@ -233,7 +254,7 @@ $('source').onchange=()=>{if(['home','search','detail'].includes(view)){view='se
 $('genre').onchange=()=>{view='home';$('search').value='';loadCatalog();};
 $('history-button').onclick=()=>{changeView('history');$('page-title').textContent='Recently played';};
 $('lyrics-button').onclick=async()=>toast((await lyricsProvider.get()).reason);
-$('providers-button').onclick=()=>showInfo('Music services',[backendStatus,...providerConfig.map(p=>`${p.id}: ${p.message}`)]);
+$('providers-button').onclick=async()=>{await refreshProviders();showInfo('Music services',[backendStatus,...providerConfig.map(p=>`${p.id}: ${p.message}`)]);};
 $('diagnostics-button').onclick=()=>showInfo('Playback details (this session)',[backendStatus,`Last search to results: ${searchLatency} ms`,`Playback attempts: ${listening.starts}; rejected attempts: ${listening.failures}`,`Buffering events: ${listening.buffering}`,`Recent startup times (ms): ${listening.startupMs.join(', ')||'none'}`]);
 function showSongOptions(id) {
   const choices = playlists.map(p => ({id:p.id,label:`Add to ${p.name}`}));
@@ -349,8 +370,8 @@ try {
 } catch { toast('Library storage is unavailable. Streaming remains available; imports and saving require browser storage.'); }
 render();
 loadCatalog();
-requestJSON('/api/providers').then(data=>{providerConfig=data.providers;const option=$('source').querySelector('[value="youtube"]');const enabled=providerConfig.some(p=>p.id==='youtube'&&p.enabled);option.disabled=!enabled;option.textContent=enabled?'YouTube Music':'YouTube Music (setup required)';}).catch(error=>{providerConfig=[{id:'youtube',enabled:false,message:error.message}];});
-requestJSON('/api/health').then(data=>{backendStatus=`Backend connected · revision ${data.revision}`;}).catch(error=>{backendStatus=error.message;toast(error.message);});
+refreshProviders();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{updateViaCache:'none'}).then(reg=>reg.update().catch(()=>{})).catch(()=>{});
-window.addEventListener('online',()=>{render();if(['home','search'].includes(view))loadCatalog($('search').value.trim());});
+window.addEventListener('online',()=>{refreshProviders();render();if(['home','search'].includes(view))loadCatalog($('search').value.trim());});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&navigator.onLine)refreshProviders();});
 window.addEventListener('offline',render);

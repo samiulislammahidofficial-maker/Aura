@@ -1,5 +1,7 @@
 # YouTube Music discovery with ytmusicapi
 
+If the source stays on “checking availability”, use the Node app at http://localhost:5173 rather than a static preview/Live Server port. The provider check now times out after six seconds, shows a specific backend/setup error, and retries up to three times. Opening **Music services** rechecks it manually; returning to the tab or reconnecting also refreshes status. A previously configured worker that stopped is restarted by the status endpoint. Reload once after updating the code; do not clear IndexedDB or your music library. For a hosted page, check that its `/api/providers` returns JSON, not HTML.
+
 Aura now uses [sigma67/ytmusicapi](https://github.com/sigma67/ytmusicapi), version 1.12.3 (MIT), for public YouTube Music discovery and metadata. This is an **unofficial API**, not the Google YouTube Data API. Public search does not require an API key or account cookies. No authenticated library access, stream extraction, DRM/subscription bypass, lyrics scraping or downloads are implemented.
 
 ## Install and run
